@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Wallet — Student</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 560px; margin: 40px auto; padding: 0 20px; color: #1b2a4a; }
+  button { background: #1b2a4a; color: #fff; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; margin-top: 8px; }
+  button:hover { opacity: 0.9; }
+  textarea, input { width: 100%; box-sizing: border-box; font-family: monospace; font-size: 0.8rem; padding: 6px; margin-top: 6px; }
+  .muted { color: #666; font-size: 0.85rem; }
+  .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 10px; }
+  a.back { font-size: 0.85rem; }
+  section { margin-top: 28px; }
+</style>
+</head>
+<body>
+  <a class="back" href="/">&larr; back</a>
+  <h1>👛 Wallet — Student</h1>
+  <p class="muted">Wallet ID: <span id="walletId">creating...</span>
+    <button id="resetBtn" style="margin-left:10px; background:#a33; padding:4px 10px; font-size:0.8rem;">Reset Wallet</button>
+  </p>
+
+  <section>
+    <h2>Receive a credential</h2>
+    <textarea id="offerInput" placeholder="Paste the offer URL from the issuer page"></textarea>
+    <button id="receiveBtn">Receive Credential</button>
+    <div id="receiveStatus" class="muted"></div>
+  </section>
+
+  <section>
+    <h2>Present a credential</h2>
+    <textarea id="requestInput" placeholder="Paste the bootstrapAuthorizationRequestUrl from the verifier page"></textarea>
+    <button id="presentBtn">Present Credential</button>
+    <div id="presentStatus" class="muted"></div>
+  </section>
+
+  <section>
+    <h2>Stored credentials</h2>
+    <button id="refreshBtn">Refresh</button>
+    <div id="credList"></div>
+  </section>
+
+  <script>
+    const LS_KEY = "demo_walletId";
+    let walletId = null;
+
+    const $ = (id) => document.getElementById(id);
+    const actionBtns = ["receiveBtn", "presentBtn", "refreshBtn"].map($);
+    const setEnabled = (on) => actionBtns.forEach((b) => (b.disabled = !on));
+    setEnabled(false);
+
+    async function createWallet() {
+      const r = await fetch("/api/wallet/create", { method: "POST" });
+      const w = await r.json();
+      if (!r.ok || !w.walletId) throw new Error("wallet create failed: " + JSON.stringify(w));
+      const id = w.walletId;
+      for (const step of ["key", "did"]) {
+        const res = await fetch(`/api/wallet/${encodeURIComponent(id)}/${step}`, { method: "POST" });
+        if (!res.ok) throw new Error(`wallet ${step} failed: ` + (await res.text()));
+      }
+      return id;
+    }
+
+    // Reuse the stored wallet if the backend still knows it; otherwise make a new one.
+    async function ensureWallet() {
+      const stored = localStorage.getItem(LS_KEY);
+      if (stored && stored !== "undefined" && stored !== "null") {
+        const check = await fetch(`/api/wallet/${encodeURIComponent(stored)}/credentials`);
+        if (check.ok) {
+          walletId = stored;
+        } else if (check.status >= 400 && check.status < 500) {
+          localStorage.removeItem(LS_KEY); // stale id (e.g. wallet-api2 was recreated)
+        } else {
+          throw new Error("wallet service unreachable (HTTP " + check.status + ")");
+        }
+      }
+      if (!walletId) {
+        walletId = await createWallet();
+        localStorage.setItem(LS_KEY, walletId);
+      }
+      $("walletId").textContent = walletId;
+      setEnabled(true);
+    }
+
+    async function init() {
+      try {
+        await ensureWallet();
+        await loadCredentials();
+      } catch (err) {
+        $("walletId").textContent = "error: " + err.message;
+        console.error(err);
+      }
+    }
+
+    $("receiveBtn").addEventListener("click", async () => {
+      const offerUrl = $("offerInput").value.trim();
+      const statusEl = $("receiveStatus");
+      statusEl.textContent = "Receiving...";
+      try {
+        const res = await fetch(`/api/wallet/${encodeURIComponent(walletId)}/receive`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ offerUrl }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || JSON.stringify(data));
+        statusEl.textContent = "Received: " + JSON.stringify(data.credentialIds);
+        loadCredentials();
+      } catch (err) {
+        statusEl.textContent = "Error: " + err.message;
+      }
+    });
+
+    $("presentBtn").addEventListener("click", async () => {
+      const requestUrl = $("requestInput").value.trim();
+      const statusEl = $("presentStatus");
+      statusEl.textContent = "Presenting...";
+      try {
+        const res = await fetch(`/api/wallet/${encodeURIComponent(walletId)}/present`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ requestUrl }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || JSON.stringify(data));
+        statusEl.textContent = "Sent. transmission_success=" + data.transmission_success;
+      } catch (err) {
+        statusEl.textContent = "Error: " + err.message;
+      }
+    });
+
+    async function loadCredentials() {
+      const el = $("credList");
+      const res = await fetch(`/api/wallet/${encodeURIComponent(walletId)}/credentials`);
+      const creds = await res.json();
+      el.textContent = "";
+      (Array.isArray(creds) ? creds : []).forEach((c) => {
+        const div = document.createElement("div");
+        div.className = "card";
+        // textContent (not innerHTML): values come from the wallet/issuer.
+        const fmt = document.createElement("strong");
+        fmt.textContent = c.format ?? "";
+        div.append(fmt, document.createElement("br"),
+          "issuer: " + (c.issuer ?? ""), document.createElement("br"),
+          "added: " + (c.addedAt ?? ""));
+        el.appendChild(div);
+      });
+    }
+
+    $("refreshBtn").addEventListener("click", loadCredentials);
+
+    $("resetBtn").addEventListener("click", async () => {
+      if (!confirm("This forgets the locally-stored wallet ID and creates a brand new wallet. Useful after the wallet-api2 container has been recreated (its data doesn't persist). Continue?")) return;
+      localStorage.removeItem(LS_KEY);
+      walletId = null;
+      setEnabled(false);
+      $("walletId").textContent = "creating...";
+      $("credList").textContent = "";
+      await init();
+    });
+
+    init();
+  </script>
+</body>
+</html>

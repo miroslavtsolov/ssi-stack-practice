@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Verifiable Diploma Demo</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 60px auto; padding: 0 20px; color: #1b2a4a; }
+  h1 { font-size: 1.6rem; }
+  .cards { display: grid; gap: 16px; margin-top: 24px; }
+  a.card { display: block; padding: 20px; border: 1px solid #ddd; border-radius: 10px; text-decoration: none; color: inherit; }
+  a.card:hover { border-color: #1b2a4a; }
+  a.card h2 { margin: 0 0 6px; font-size: 1.1rem; }
+  a.card p { margin: 0; color: #555; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+  <h1>🎓 Verifiable Diploma Demo</h1>
+  <p>Three roles, one credential. Open each in its own tab and walk the flow: issue → receive → present → verify.</p>
+  <div class="cards">
+    <a class="card" href="/issuer.html"><h2>Issuer (University)</h2><p>Issue a diploma credential offer.</p></a>
+    <a class="card" href="/wallet.html"><h2>Wallet (Student)</h2><p>Receive and store the credential.</p></a>
+    <a class="card" href="/verifier.html"><h2>Verifier (Employer)</h2><p>Request and verify the diploma.</p></a>
+  </div>
+</body>
+</html>

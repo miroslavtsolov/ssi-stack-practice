@@ -1,0 +1,16 @@
+{
+  "name": "ssi-diploma-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Minimal issuer/wallet/verifier UI on top of the walt.id Community Stack.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
